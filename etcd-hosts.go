@@ -1,10 +1,4 @@
-/**
- * Created with IntelliJ IDEA.
- * User: chris
- * Date: 08/09/2013
- * Time: 16:45
- * To change this template use File | Settings | File Templates.
- */
+
 package main
 
 import (
