@@ -1,55 +1,65 @@
-
 package main
 
 import (
 	"fmt"
-	"time"
-	"github.com/coreos/go-etcd/etcd"
 	"github.com/coreos/etcd/store"
-	"strconv"
+	"github.com/coreos/go-etcd/etcd"
+	"time"
 )
+
+type Host struct {
+	Hostname  string
+	Ipaddress string
+	Ttl       int64
+}
 
 func main() {
 
-	nodename := "chris"
+	nodename := "hosts"
 
-	c := etcd.NewClient()
-
+	etcdClient := etcd.NewClient()
 
 	ch := make(chan *store.Response)
+	hostChannel := make(chan *Host, 5)
 	//stop := make(chan bool, 100)
 
-	go setLoop("bar", c, nodename)
-	go receiver(ch, c)
-
-	c.Watch(nodename, 0, ch, nil)
+	go receiver(ch, etcdClient, hostChannel)
+	go loop(ch, etcdClient, nodename)
+	go hostthing(hostChannel)
+	etcdClient.Watch(nodename, 0, ch, nil)
 }
 
+func loop(channel chan *store.Response, etcdClient *etcd.Client, nodename string) {
+	for {
+		responses, err := etcdClient.Get(nodename)
+		if err != nil {
+			//print an error
+		} else {
+			for _, response := range responses {
+				channel <- response
+			}
+		}
+		time.Sleep(time.Second * 2)
 
-func setLoop(value string, c *etcd.Client, nodename string) {
-	time.Sleep(time.Second)
-	for i := 0; true; i++ {
-		newValue := fmt.Sprintf("%s_%v", value, i)
-		c.Set(nodename+"/foo"+strconv.Itoa(i), newValue, 100)
-		//time.Sleep(time.Second / 10000)
 	}
 }
 
-func receiver(channel chan *store.Response, client *etcd.Client) {
+func receiver(channel chan *store.Response, etcdClient *etcd.Client, hostChannel chan *Host) {
 	for true {
-	    test := <-channel
-		//fmt.Printf("%+v\n", test)
-		results, err := client.Get("chris")
+		response := <-channel
+		fmt.Printf("%+v\n", response)
 
-		if err != nil || results[0].Key != "/foo" || results[0].Value != "bar" {
-			if err != nil {
-				fmt.Print(err)
-			}
-			fmt.Printf("hello %s %s %v\n", results[0].Key, results[0].Value, results[0].TTL)
-		}
+		host := Host{response.Key, response.Value, response.TTL}
+		fmt.Println(host)
+		hostChannel <- &host
+	}
+}
 
-		fmt.Printf("%+v\n\n", test)
-
-
+func hostthing(hostChannel chan *Host) {
+	hosts := make(map[string]*Host)
+	for {
+		host := <-hostChannel
+		hosts[host.Hostname] = host
+		fmt.Println(host)
 	}
 }
